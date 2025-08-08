@@ -82,33 +82,44 @@ class SmartDownloadManager(QThread):
         try:
             # 创建临时目录
             self.temp_dir = Path(tempfile.mkdtemp())
+            print(f"创建临时目录: {self.temp_dir}")
 
             # 下载文件
             self.status_updated.emit("正在下载...")
             downloaded_file = self._download_file()
+            print(f"下载完成: {downloaded_file}")
 
             # 解压文件
             self.status_updated.emit("正在解压...")
             extracted_dir = self._extract_file(downloaded_file)
+            print(f"解压完成: {extracted_dir}")
 
             # 安装到永久位置
             self.status_updated.emit("正在安装...")
             permanent_dir = self._install_to_permanent_location(extracted_dir)
+            print(f"安装完成: {permanent_dir}")
 
             # 配置PATH
             self.status_updated.emit("正在配置环境变量...")
+            print("开始配置PATH...")
             self._configure_path(permanent_dir)
+            print("PATH配置完成")
 
             # 保存安装信息
+            print("保存安装信息...")
             self._save_installation_info(permanent_dir)
+            print("安装信息保存完成")
 
             # 清理临时文件
             if self.temp_dir and self.temp_dir.exists():
                 shutil.rmtree(self.temp_dir)
+                print("临时文件清理完成")
 
+            print("发送下载完成信号...")
             self.download_finished.emit(True, f"{self.target_name} 安装成功！")
 
         except Exception as e:
+            print(f"下载过程中出现异常: {e}")
             # 清理临时文件
             if self.temp_dir and self.temp_dir.exists():
                 shutil.rmtree(self.temp_dir)
@@ -152,33 +163,45 @@ class SmartDownloadManager(QThread):
 
     def _install_to_permanent_location(self, extracted_dir):
         """安装到永久位置"""
-        # 确定安装目录
-        if platform.system() == "Windows":
-            install_dir = (
-                Path.home() / "AppData" / "Local" / "Programs" / self.target_name
-            )
-        else:
-            install_dir = Path.home() / ".local" / "bin" / self.target_name
+        # 获取当前项目的根目录
+        # 从当前文件路径向上查找，直到找到包含pyproject.toml的目录
 
+        
+        # 在项目根目录创建ffmpeg目录
+        install_dir = Path() / "ffmpeg"
+        print(f"安装到项目根目录: {install_dir}")
+        
         # 创建安装目录
         install_dir.mkdir(parents=True, exist_ok=True)
+        print(f"安装目录已创建: {install_dir}")
 
         # 复制文件
         if extracted_dir.exists():
+            print(f"开始复制文件，源目录: {extracted_dir}")
             for item in extracted_dir.iterdir():
+                print(f"复制项目: {item.name}")
                 if item.is_dir():
                     shutil.copytree(item, install_dir / item.name, dirs_exist_ok=True)
                 else:
                     shutil.copy2(item, install_dir)
+            print(f"文件复制完成，目标目录: {install_dir}")
+        else:
+            print(f"警告：解压目录不存在: {extracted_dir}")
 
         return install_dir
 
     def _configure_path(self, permanent_dir):
         """配置PATH环境变量"""
+        # 查找包含可执行文件的bin目录
+        bin_dir = self._find_bin_directory(permanent_dir)
+        if not bin_dir:
+            print(f"警告：在 {permanent_dir} 中未找到可执行文件目录")
+            return
+            
         if platform.system() == "Windows":
-            self._configure_windows_path(permanent_dir)
+            self._configure_windows_path(bin_dir)
         else:
-            self._configure_unix_path(permanent_dir)
+            self._configure_unix_path(bin_dir)
 
     def _configure_windows_path(self, permanent_dir):
         """配置Windows PATH"""
@@ -237,10 +260,26 @@ class SmartDownloadManager(QThread):
         """刷新环境变量"""
         try:
             if platform.system() == "Windows":
-                # Windows: 通知系统环境变量已更改
+                # Windows: 使用更安全的方式通知环境变量更改
+                # 避免使用SendMessageW，因为它可能导致应用程序卡住
                 import ctypes
-
-                ctypes.windll.user32.SendMessageW(0xFFFF, 0x001A, 0, 0)
+                from ctypes import wintypes
+                
+                # 使用WM_SETTINGCHANGE消息，但只发送到当前进程
+                HWND_BROADCAST = 0xFFFF
+                WM_SETTINGCHANGE = 0x001A
+                
+                # 使用PostMessage而不是SendMessage，避免阻塞
+                try:
+                    ctypes.windll.user32.PostMessageW(
+                        HWND_BROADCAST, 
+                        WM_SETTINGCHANGE, 
+                        0, 
+                        0
+                    )
+                except Exception:
+                    # 如果PostMessage失败，静默忽略，不影响下载流程
+                    pass
             else:
                 # Unix: 重新加载shell配置
                 os.environ["PATH"] = (
@@ -268,10 +307,18 @@ class SmartDownloadManager(QThread):
 
     def _find_bin_directory(self, base_dir: Path):
         """查找bin目录"""
+        # 首先查找标准的bin目录
         for item in base_dir.rglob("bin"):
             if item.is_dir():
                 return item
-        return None
+        
+        # 如果找不到bin目录，查找包含ffmpeg可执行文件的目录
+        for item in base_dir.rglob("*"):
+            if item.is_file() and item.name.lower() in ["ffmpeg.exe", "ffmpeg"]:
+                return item.parent
+        
+        # 如果还是找不到，返回base_dir本身
+        return base_dir
 
     def _save_installation_info(self, permanent_dir):
         """保存安装信息"""
@@ -314,6 +361,12 @@ class SmartDownloadDialog:
 
     def start_download(self):
         """开始下载"""
+        # 如果已有下载管理器在运行，先停止它
+        if self.download_manager and self.download_manager.isRunning():
+            self.download_manager.quit()
+            self.download_manager.wait()
+        
+        # 创建新的下载管理器
         self.download_manager = SmartDownloadManager(self.url, self.target_name)
         
         # 连接进度信号到进度条
@@ -1260,13 +1313,18 @@ class FFmpegDownloadProgressDialog:
 
     def start_download(self):
         """开始下载"""
+        # 如果已有下载管理器在运行，先停止它
+        if self.download_manager and self.download_manager.isRunning():
+            self.download_manager.quit()
+            self.download_manager.wait()
+        
         # 设置下载URL
         if platform.system() == "Windows":
             url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
         else:
             url = "https://evermeet.cx/ffmpeg/getrelease/zip"
 
-        # 创建下载管理器
+        # 创建新的下载管理器
         self.download_manager = SmartDownloadManager(url, "FFmpeg")
         
         # 连接进度信号到进度条
@@ -1278,11 +1336,15 @@ class FFmpegDownloadProgressDialog:
 
     def on_download_finished(self, success, message):
         """下载完成"""
+        print(f"收到下载完成信号: success={success}, message={message}")
+        
         # 关闭进度条弹窗
         if self.progress_dialog:
+            print("关闭进度条弹窗...")
             self.progress_dialog.close()
         
         if success:
+            print("显示安装完成对话框...")
             # 显示安装完成对话框
             show_success_dialog(
                 "安装完成",
@@ -1290,6 +1352,7 @@ class FFmpegDownloadProgressDialog:
                 self.parent
             )
         else:
+            print("显示错误对话框...")
             # 显示错误消息并提供重试选项
             buttons = [
                 {"text": "重试", "type": "primary"},
@@ -1304,6 +1367,7 @@ class FFmpegDownloadProgressDialog:
             )
             
             if result == "重试":
+                print("用户选择重试，重新开始下载...")
                 # 重新开始下载
                 self.start_download()
 
