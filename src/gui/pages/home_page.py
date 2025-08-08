@@ -35,7 +35,7 @@ class HomePage(QWidget):
         # 设置背景色
         self.setStyleSheet("""
             QWidget {
-                background-color: #f8f9fa;
+                background-color: #fafbfc;
             }
         """)
 

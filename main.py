@@ -27,6 +27,15 @@ def main():
     app.setApplicationVersion("0.1.0")
     app.setOrganizationName("HibiKier")
 
+    # 设置应用程序图标
+    try:
+        from PySide6.QtGui import QIcon
+
+        icon = QIcon("assets/icons/logo.png")
+        app.setWindowIcon(icon)
+    except Exception as e:
+        print(f"设置应用程序图标失败: {e}")
+
     # 设置应用程序样式
     app.setStyle("Fusion")
 
@@ -37,7 +46,7 @@ def main():
     if config_manager.is_first_run():
         # 显示介绍对话框
         intro_dialog = IntroDialog()
-        if intro_dialog.exec() == QDialog.Accepted:
+        if intro_dialog.exec() == QDialog.DialogCode.Accepted:
             # 标记为非首次启动
             config_manager.set_first_run_completed()
         else:

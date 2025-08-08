@@ -5,12 +5,12 @@
 使用此脚本来启动应用程序
 """
 
-import os
 import sys
+from pathlib import Path
 
 # 添加项目根目录到Python路径
-current_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, current_dir)
+current_dir = Path(__file__).resolve().parent
+sys.path.insert(0, str(current_dir))
 
 try:
     from main import main

@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..utils.config import ConfigManager
+from .pages.environment_page import EnvironmentPage
 from .pages.home_page import HomePage
 from .pages.settings_page import SettingsPage
 from .sidebar import Sidebar
@@ -68,7 +69,9 @@ class AnimatedStackedWidget(QStackedWidget):
 
         def on_fade_in_finished():
             print(f"淡入淡出动画完成: index={index}")
-            self.setGraphicsEffect(None)
+            # 创建一个空的QGraphicsOpacityEffect来替代None
+            empty_effect = QGraphicsOpacityEffect()
+            self.setGraphicsEffect(empty_effect)
             self.is_animating = False
             print(f"动画状态已重置: is_animating={self.is_animating}")
             # 确保当前页面可见
@@ -110,7 +113,9 @@ class AnimatedStackedWidget(QStackedWidget):
 
         def on_slide_finished():
             print(f"滑动动画完成: index={index}")
-            self.setGraphicsEffect(None)
+            # 创建一个空的QGraphicsOpacityEffect来替代None
+            empty_effect = QGraphicsOpacityEffect()
+            self.setGraphicsEffect(empty_effect)
             self.is_animating = False
             print(f"动画状态已重置: is_animating={self.is_animating}")
             # 确保当前页面可见
@@ -195,7 +200,7 @@ class AnimatedStackedWidget(QStackedWidget):
 class CustomTitleBar(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedHeight(50)
+        self.setFixedHeight(50)  # 增加标题栏高度到80px
         self.setStyleSheet("""
             background: #fafbfc;
         """)
@@ -237,50 +242,129 @@ class CustomTitleBar(QWidget):
             )
         )
 
-        # 按钮通用样式 - 深灰色线条，无背景
+        # 按钮通用样式 - 模拟系统原生标题栏按钮
         btn_style = """
             QPushButton {
                 border: none;
                 background: transparent;
                 color: #5a6c7d;
-                font-size: 20px;
-                font-weight: 500;
+                font-size: 16px;
+                font-weight: 400;
+                font-family: "Segoe UI", "Microsoft YaHei";
+                min-width: 46px;
+                min-height: 32px;
+                margin: 0px;
+                padding: 0px;
             }
             QPushButton:hover {
-                background: transparent;
+                background-color: rgba(0, 0, 0, 0.1);
+                color: #2c3e50;
+            }
+            QPushButton:hover QIcon {
+                color: #2c3e50;
+            }
+            QPushButton:pressed {
+                background-color: rgba(0, 0, 0, 0.2);
+            }
+            QPushButton:pressed QIcon {
                 color: #2c3e50;
             }
         """
 
         # 最小化按钮
-        btn_min = QPushButton("–")
-        btn_min.setFixedSize(36, 36)
+        btn_min = QPushButton()
+        btn_min.setFixedSize(46, 32)
+        btn_min.setIcon(QIcon("assets/icons/minimize.svg"))
         btn_min.setStyleSheet(btn_style)
+        btn_min.setFocusPolicy(Qt.FocusPolicy.NoFocus)  # 禁用焦点，避免焦点框
         if parent and hasattr(parent, "showMinimized"):
             btn_min.clicked.connect(parent.showMinimized)
         layout.addWidget(btn_min)
 
         # 最大化/还原按钮
-        btn_max = QPushButton("□")
-        btn_max.setFixedSize(36, 36)
+        btn_max = QPushButton()
+        btn_max.setFixedSize(46, 32)
+        btn_max.setIcon(QIcon("assets/icons/maximize.svg"))
         btn_max.setStyleSheet(btn_style)
+        btn_max.setFocusPolicy(Qt.FocusPolicy.NoFocus)  # 禁用焦点，避免焦点框
         if (
             parent
             and hasattr(parent, "showNormal")
             and hasattr(parent, "isMaximized")
             and hasattr(parent, "showMaximized")
         ):
-            btn_max.clicked.connect(
-                lambda: parent.showNormal()
-                if parent.isMaximized()
-                else parent.showMaximized()
-            )
+            # 创建切换图标的函数
+            def toggle_maximize():
+                if parent.isMaximized():
+                    parent.showNormal()
+                    btn_max.setIcon(QIcon("assets/icons/maximize.svg"))
+                else:
+                    parent.showMaximized()
+                    btn_max.setIcon(QIcon("assets/icons/restore.svg"))
+
+            btn_max.clicked.connect(toggle_maximize)
+
+            # 初始化图标状态
+            if parent.isMaximized():
+                btn_max.setIcon(QIcon("assets/icons/restore.svg"))
+            else:
+                btn_max.setIcon(QIcon("assets/icons/maximize.svg"))
         layout.addWidget(btn_max)
 
-        # 关闭按钮 - 与其他按钮保持一致，不特殊红色
-        btn_close = QPushButton("×")
-        btn_close.setFixedSize(36, 36)
-        btn_close.setStyleSheet(btn_style)
+        # 创建自定义关闭按钮类
+        class CloseButton(QPushButton):
+            def __init__(self, parent=None):
+                super().__init__(parent)
+                self.normal_icon = QIcon("assets/icons/close.svg")
+                self.white_icon = QIcon("assets/icons/close_white.svg")
+                self.setIcon(self.normal_icon)
+
+                # 设置样式
+                self.setStyleSheet("""
+                    QPushButton {
+                        border: none;
+                        background: transparent;
+                        color: #5a6c7d;
+                        font-size: 16px;
+                        font-weight: 400;
+                        font-family: "Segoe UI", "Microsoft YaHei";
+                        min-width: 46px;
+                        min-height: 32px;
+                        margin: 0px;
+                        padding: 0px;
+                        outline: none;
+                    }
+                    QPushButton:hover {
+                        background-color: #e81123;
+                        color: white;
+                        border: none;
+                        outline: none;
+                    }
+                    QPushButton:pressed {
+                        background-color: #c50e1f;
+                        color: white;
+                        border: none;
+                        outline: none;
+                    }
+                    QPushButton:focus {
+                        border: none;
+                        outline: none;
+                    }
+                """)
+
+            def enterEvent(self, event):
+                self.setIcon(self.white_icon)
+                super().enterEvent(event)
+
+            def leaveEvent(self, event):
+                self.setIcon(self.normal_icon)
+                super().leaveEvent(event)
+
+        # 使用自定义关闭按钮
+        btn_close = CloseButton()
+        btn_close.setFixedSize(46, 32)
+        btn_close.setFocusPolicy(Qt.FocusPolicy.NoFocus)  # 禁用焦点，避免焦点框
+
         if parent and hasattr(parent, "close"):
             btn_close.clicked.connect(parent.close)
         layout.addWidget(btn_close)
@@ -314,14 +398,37 @@ class MainWindow(QMainWindow):
         self.current_page_index = 0  # 添加当前页面索引跟踪
         self._anim_mask = None
         self._fade_anim = None
+
+        # 强制设置初始窗口大小
+        self.resize(1200, 800)
+        print(f"__init__: 强制设置初始大小 1200x800")
+
         self.setup_ui()
         self.setup_connections()
         self.restore_geometry()
+
+        # 确保窗口大小正确
+        if self.width() > 1920 or self.height() > 1080:  # 如果窗口过大
+            self.resize(1200, 800)
+            # 居中显示
+            screen_geometry = self.screen().geometry()
+            x = (screen_geometry.width() - 1200) // 2
+            y = (screen_geometry.height() - 800) // 2
+            self.move(x, y)
+            print(f"__init__: 检测到窗口过大，重置为 1200x800")
 
     def setup_ui(self):
         """设置UI"""
         self.setWindowTitle("真寻Bot GUI - 图形化管理界面")
         self.setMinimumSize(1000, 700)
+
+        # 设置应用程序图标
+        try:
+            icon = QIcon("assets/icons/logo.png")
+            self.setWindowIcon(icon)
+        except Exception as e:
+            print(f"设置应用程序图标失败: {e}")
+
         # 设置无边框和背景透明，实现圆角窗口
         self.setWindowFlag(Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
@@ -339,12 +446,13 @@ class MainWindow(QMainWindow):
         # 给central_widget加圆角和背景色
         central_widget.setStyleSheet("""
             #centralwidget {
-                background: #fff;
+                background: #fafbfc;
                 border-radius: 12px;
+                border: 1px solid #e1e5e9;
             }
         """)
 
-        # 自定义标题栏（高度固定）
+        # 自定义标题栏（高度更高）
         self.title_bar = CustomTitleBar(self)
         main_layout.addWidget(self.title_bar)
 
@@ -358,6 +466,8 @@ class MainWindow(QMainWindow):
             QStackedWidget {
                 background-color: #f8f9fa;
                 border-radius: 12px;
+                border: 1px solid #e1e5e9;
+                border-bottom-left-radius: 0;
             }
         """)
         self.create_pages()
@@ -376,7 +486,7 @@ class MainWindow(QMainWindow):
         # 设置窗口样式（整体圆角）
         self.setStyleSheet("""
             QMainWindow {
-                background-color: #ffffff;
+                background-color: #fafbfc;
                 border-radius: 12px;
             }
             QWidget#centralwidget {
@@ -397,6 +507,10 @@ class MainWindow(QMainWindow):
         # 设置页面
         self.settings_page = SettingsPage()
         self.content_area.addWidget(self.settings_page)
+
+        # 环境检测页面
+        self.environment_page = EnvironmentPage()
+        self.content_area.addWidget(self.environment_page)
 
     def setup_connections(self):
         """设置信号连接"""
@@ -453,8 +567,9 @@ class MainWindow(QMainWindow):
             self._fade_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
 
             def on_anim_finished():
-                self._anim_mask.deleteLater()
-                self._anim_mask = None
+                if self._anim_mask is not None:
+                    self._anim_mask.deleteLater()
+                    self._anim_mask = None
                 self._fade_anim = None
                 print("遮罩动画完成，已移除遮罩")
 
@@ -470,7 +585,7 @@ class MainWindow(QMainWindow):
             print(f"侧边栏状态已更新")
 
             # 更新窗口标题
-            page_names = ["主页", "设置"]
+            page_names = ["主页", "设置", "检测"]
             if 0 <= index < len(page_names):
                 new_title = f"真寻Bot GUI - {page_names[index]}"
                 self.setWindowTitle(new_title)
@@ -485,14 +600,51 @@ class MainWindow(QMainWindow):
         size = geometry["size"]
         position = geometry["position"]
 
-        self.resize(size[0], size[1])
-        self.move(position[0], position[1])
+        print(f"restore_geometry: 从配置读取大小 {size}, 位置 {position}")
+
+        # 检查是否是首次运行或窗口大小异常（全屏）
+        screen_geometry = self.screen().geometry()
+        is_fullscreen_size = (
+            size[0] >= screen_geometry.width() and size[1] >= screen_geometry.height()
+        )
+
+        print(
+            f"restore_geometry: 屏幕大小 {screen_geometry.width()}x{screen_geometry.height()}"
+        )
+        print(f"restore_geometry: 是否全屏大小 {is_fullscreen_size}")
+
+        if is_fullscreen_size:
+            # 如果是全屏大小，使用默认的正常大小
+            self.resize(1200, 800)
+            # 居中显示
+            x = (screen_geometry.width() - 1200) // 2
+            y = (screen_geometry.height() - 800) // 2
+            self.move(x, y)
+            print(f"restore_geometry: 重置为正常大小 1200x800, 位置 ({x}, {y})")
+        else:
+            # 使用保存的大小和位置
+            self.resize(size[0], size[1])
+            self.move(position[0], position[1])
+            print(
+                f"restore_geometry: 使用保存的大小 {size[0]}x{size[1]}, 位置 ({position[0]}, {position[1]})"
+            )
 
     def closeEvent(self, event):
         """窗口关闭事件"""
-        # 保存窗口几何信息
-        size = (self.width(), self.height())
-        position = (self.x(), self.y())
-        self.config_manager.save_window_geometry(size, position)
+        # 检查窗口是否处于最大化状态
+        if not self.isMaximized():
+            # 只有在非最大化状态下才保存窗口几何信息
+            size = (self.width(), self.height())
+            position = (self.x(), self.y())
+
+            # 检查是否是全屏大小
+            screen_geometry = self.screen().geometry()
+            is_fullscreen_size = (
+                size[0] >= screen_geometry.width()
+                and size[1] >= screen_geometry.height()
+            )
+
+            if not is_fullscreen_size:
+                self.config_manager.save_window_geometry(size, position)
 
         event.accept()

@@ -22,14 +22,13 @@ class NavButton(QWidget):
         self.is_active = False
         self.tooltip_text = tooltip
         self.icon_path = icon_path
-        self.anim = None
+
         self.setup_ui()
         # 按钮宽度为侧边栏宽度减去左右边距
         sidebar_width = 84  # 侧边栏宽度
         button_width = sidebar_width - 8  # 左右各4px边距
         self.setFixedSize(button_width, 66)
         self.setToolTip(tooltip)
-        self.setMouseTracking(True)  # 启用鼠标追踪，确保悬停事件正常工作
 
     def setup_ui(self):
         """设置UI"""
@@ -112,17 +111,14 @@ class NavButton(QWidget):
     def update_style(self, animated=True):
         """更新样式 - 重新设计的简单有效系统"""
         if self.is_active:
-            if animated:
-                self.animate_bg(True)
-            else:
-                # 选中状态：使用调色板设置背景色
-                palette = self.palette()
-                palette.setColor(QPalette.ColorRole.Window, QColor("#ffffff"))
-                self.setPalette(palette)
-                self.setAutoFillBackground(True)
+            # 选中状态：使用调色板设置背景色
+            palette = self.palette()
+            palette.setColor(QPalette.ColorRole.Window, QColor("#ffffff"))
+            self.setPalette(palette)
+            self.setAutoFillBackground(True)
 
-                # 清除样式表，让调色板生效
-                self.setStyleSheet("")
+            # 清除样式表，让调色板生效
+            self.setStyleSheet("")
 
             # 轻微阴影
             shadow = QGraphicsDropShadowEffect(self)
@@ -152,17 +148,14 @@ class NavButton(QWidget):
             # 更新图标颜色为青色
             self.set_icon("#17a2b8")
         else:
-            if animated:
-                self.animate_bg(False)
-            else:
-                # 未选中状态：透明背景
-                palette = self.palette()
-                palette.setColor(QPalette.ColorRole.Window, QColor(0, 0, 0, 0))
-                self.setPalette(palette)
-                self.setAutoFillBackground(False)
+            # 未选中状态：透明背景
+            palette = self.palette()
+            palette.setColor(QPalette.ColorRole.Window, QColor(0, 0, 0, 0))
+            self.setPalette(palette)
+            self.setAutoFillBackground(False)
 
-                # 清除样式表
-                self.setStyleSheet("")
+            # 清除样式表
+            self.setStyleSheet("")
 
             self.setGraphicsEffect(QGraphicsDropShadowEffect())
 
@@ -211,53 +204,18 @@ class NavButton(QWidget):
             bar_h = self.height() - 44
             painter.drawRoundedRect(bar_x, bar_y, bar_w, bar_h, 3, 3)
 
-    def animate_bg(self, active):
-        """简化的动画效果"""
-        if self.anim:
-            self.anim.stop()
-
-        self.anim = QPropertyAnimation(self, b"windowOpacity")
-        self.anim.setDuration(150)
-        self.anim.setEasingCurve(QEasingCurve.Type.OutCubic)
-
-        if active:
-            # 从透明到不透明
-            self.anim.setStartValue(0.7)
-            self.anim.setEndValue(1.0)
-        else:
-            # 从不透明到透明
-            self.anim.setStartValue(1.0)
-            self.anim.setEndValue(0.7)
-
-        self.anim.finished.connect(lambda: self.repaint())
-        self.anim.start()
-
     def set_active(self, active: bool):
         """设置激活状态"""
         if self.is_active == active:
             return
         self.is_active = active
-        self.update_style(animated=True)
+        self.update_style()
 
     def mousePressEvent(self, event):
         """鼠标点击事件"""
         if event.button() == Qt.MouseButton.LeftButton:
             self.clicked.emit(self.index)
         super().mousePressEvent(event)
-
-    def enterEvent(self, event):
-        """鼠标进入事件"""
-        if not self.is_active:
-            # 未选中状态下，鼠标悬停时改变透明度
-            self.setWindowOpacity(0.8)
-        super().enterEvent(event)
-
-    def leaveEvent(self, event):
-        """鼠标离开事件"""
-        if not self.is_active:
-            # 未选中状态下，鼠标离开时恢复透明度
-            self.setWindowOpacity(1.0)
-        super().leaveEvent(event)
 
 
 class Sidebar(QWidget):
@@ -268,7 +226,6 @@ class Sidebar(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.nav_buttons = []
-        self.is_animating = False  # 添加动画状态锁定
         self.setup_ui()
 
     def setup_ui(self):
@@ -289,6 +246,7 @@ class Sidebar(QWidget):
         nav_items = [
             ("assets/icons/home.svg", "主页", 0),
             ("assets/icons/setting.svg", "设置", 1),
+            ("assets/icons/environment.svg", "环境", 2),
         ]
 
         for icon, tooltip, index in nav_items:
