@@ -34,6 +34,15 @@ from PySide6.QtWidgets import (
 )
 
 from src.gui.intro_dialog import IntroDialog, IntroPage
+from src.gui.widgets import (
+    show_confirm_dialog,
+    show_error_dialog,
+    show_info_dialog,
+    show_multi_button_dialog,
+    show_progress_dialog,
+    show_success_dialog,
+    show_warning_dialog,
+)
 from src.gui.widgets.animated_button import AnimatedButton
 
 
@@ -277,127 +286,56 @@ class SmartDownloadManager(QThread):
             json.dump(info, f, indent=2)
 
 
-class SmartDownloadDialog(QDialog):
-    """智能下载对话框"""
+class SmartDownloadDialog:
+    """智能下载对话框 - 使用全局弹窗系统"""
 
     def __init__(self, url, target_name, parent=None):
-        super().__init__(parent)
         self.url = url
         self.target_name = target_name
-        self.setup_ui()
+        self.parent = parent
+        self.download_manager = None
+        self.progress_dialog = None
 
-    def setup_ui(self):
-        """设置UI"""
-        self.setWindowTitle(f"下载 {self.target_name}")
-        self.setFixedSize(400, 200)
-
-        layout = QVBoxLayout(self)
-
-        # 状态标签
-        self.status_label = QLabel("准备下载...")
-        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.status_label)
-
-        # 进度条
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setRange(0, 100)
-        layout.addWidget(self.progress_bar)
-
+    def exec(self):
+        """执行下载"""
+        # 创建进度条弹窗
+        from src.gui.widgets.global_dialog import ProgressDialog
+        self.progress_dialog = ProgressDialog(
+            f"下载 {self.target_name}",
+            "正在准备下载...",
+            self.parent
+        )
+        
         # 开始下载
         self.start_download()
+        
+        # 显示进度条弹窗
+        self.progress_dialog.exec()
 
     def start_download(self):
         """开始下载"""
         self.download_manager = SmartDownloadManager(self.url, self.target_name)
-        self.download_manager.progress_updated.connect(self.progress_bar.setValue)
-        self.download_manager.status_updated.connect(self.status_label.setText)
+        
+        # 连接进度信号到进度条
+        self.download_manager.progress_updated.connect(self.progress_dialog.set_progress)
+        self.download_manager.status_updated.connect(self.progress_dialog.set_status)
         self.download_manager.download_finished.connect(self.on_download_finished)
+        
         self.download_manager.start()
 
     def on_download_finished(self, success, message):
         """下载完成回调"""
+        # 关闭进度条弹窗
+        if self.progress_dialog:
+            self.progress_dialog.close()
+        
         if success:
-            QMessageBox.information(self, "下载完成", message)
+            show_success_dialog("下载完成", message, self.parent)
         else:
-            QMessageBox.critical(self, "下载失败", message)
-        self.accept()
+            show_error_dialog("下载失败", message, self.parent)
 
 
-class CustomDownloadDialog(QDialog):
-    """自定义下载对话框"""
 
-    def __init__(self, title, message, parent=None):
-        super().__init__(parent)
-        self.clicked_button = None
-        self.setup_ui(title, message)
-
-    def setup_ui(self, title, message):
-        """设置UI"""
-        self.setWindowTitle(title)
-        self.setFixedSize(400, 200)
-
-        layout = QVBoxLayout(self)
-
-        # 消息标签
-        message_label = QLabel(message)
-        message_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        message_label.setWordWrap(True)
-        layout.addWidget(message_label)
-
-        # 按钮布局
-        button_layout = QHBoxLayout()
-
-        # 自动下载按钮
-        auto_btn = QPushButton("自动下载")
-        auto_btn.clicked.connect(lambda: self.button_clicked("auto"))
-        button_layout.addWidget(auto_btn)
-
-        # 手动下载按钮
-        manual_btn = QPushButton("手动下载")
-        manual_btn.clicked.connect(lambda: self.button_clicked("manual"))
-        button_layout.addWidget(manual_btn)
-
-        # 取消按钮
-        cancel_btn = QPushButton("取消")
-        cancel_btn.clicked.connect(lambda: self.button_clicked("cancel"))
-        button_layout.addWidget(cancel_btn)
-
-        layout.addLayout(button_layout)
-
-    def button_clicked(self, button_type):
-        """按钮点击事件"""
-        self.clicked_button = button_type
-        self.accept()
-
-    def get_clicked_button(self):
-        """获取点击的按钮"""
-        return self.clicked_button
-
-
-class CustomResultDialog(QDialog):
-    """自定义结果对话框"""
-
-    def __init__(self, title, message, parent=None):
-        super().__init__(parent)
-        self.setup_ui(title, message)
-
-    def setup_ui(self, title, message):
-        """设置UI"""
-        self.setWindowTitle(title)
-        self.setFixedSize(400, 200)
-
-        layout = QVBoxLayout(self)
-
-        # 消息标签
-        message_label = QLabel(message)
-        message_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        message_label.setWordWrap(True)
-        layout.addWidget(message_label)
-
-        # 确定按钮
-        ok_btn = QPushButton("确定")
-        ok_btn.clicked.connect(self.accept)
-        layout.addWidget(ok_btn)
 
 
 class EnvironmentDetector(QThread):
@@ -967,14 +905,22 @@ class EnvironmentPage(QWidget):
 
     def show_python_download_dialog(self):
         """显示Python下载对话框"""
-        dialog = CustomDownloadDialog(
-            "Python未安装", "检测到Python未安装，是否要下载并安装Python？", self
+        buttons = [
+            {"text": "自动下载", "type": "primary"},
+            {"text": "手动下载", "type": "info"},
+            {"text": "取消", "type": "default"}
+        ]
+        
+        result = show_multi_button_dialog(
+            "Python未安装",
+            "检测到Python未安装，是否要下载并安装Python？",
+            buttons,
+            self,
         )
-        dialog.exec()
 
-        if dialog.get_clicked_button() == "auto":
+        if result == "自动下载":
             self.download_python_3_11()
-        elif dialog.get_clicked_button() == "manual":
+        elif result == "手动下载":
             webbrowser.open("https://www.python.org/downloads/")
 
     def download_python_3_11(self):
@@ -1124,12 +1070,36 @@ class EnvironmentPage(QWidget):
 
     def show_ffmpeg_download_dialog(self):
         """显示FFmpeg下载对话框"""
-        dialog = FFmpegDownloadDialog(self)
-        result = dialog.exec()
+        buttons = [
+            {"text": "开始下载", "type": "primary"},
+            {"text": "取消", "type": "default"}
+        ]
+        
+        result = show_multi_button_dialog(
+            "FFmpeg未检测到",
+            "检测到您的系统中未安装FFmpeg。\n\nFFmpeg是处理音频和视频文件的重要工具，真寻Bot需要它来处理多媒体文件。\n\n是否要自动下载并安装FFmpeg？",
+            buttons,
+            self,
+        )
 
-        # 如果用户完成了下载，重新检测FFmpeg
-        if result == QDialog.DialogCode.Accepted:
-            QTimer.singleShot(1000, self.auto_detect_ffmpeg)
+        # 如果用户选择了下载，开始下载流程
+        if result == "开始下载":
+            self.start_ffmpeg_download()
+
+    def start_ffmpeg_download(self):
+        """开始FFmpeg下载流程"""
+        # 设置下载URL
+        if platform.system() == "Windows":
+            url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
+        else:
+            url = "https://evermeet.cx/ffmpeg/getrelease/zip"
+
+        # 创建下载进度对话框
+        download_dialog = FFmpegDownloadProgressDialog(self)
+        download_dialog.exec()
+        
+        # 下载完成后重新检测FFmpeg
+        QTimer.singleShot(1000, self.auto_detect_ffmpeg)
 
     def download_ffmpeg(self):
         """下载FFmpeg"""
@@ -1246,287 +1216,32 @@ class EnvironmentPage(QWidget):
         return normalized
 
 
-class FFmpegDownloadDialog(QDialog):
-    """FFmpeg下载对话框 - 简化版本"""
+
+
+
+class FFmpegDownloadProgressDialog:
+    """FFmpeg下载进度对话框 - 使用全局弹窗系统"""
 
     def __init__(self, parent=None):
-        super().__init__(parent)
+        self.parent = parent
         self.download_manager = None
-        self.setup_ui()
-        self.setup_connections()
+        self.progress_dialog = None
 
-    def setup_ui(self):
-        """设置UI - 简化版本"""
-        self.setWindowTitle("FFmpeg安装")
-        self.setFixedSize(400, 300)
-        self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.WindowCloseButtonHint)
-        self.setModal(True)
-
-        # 设置背景
-        self.setStyleSheet("""
-            QDialog {
-                background-color: white;
-                border: 1px solid #e1e5e9;
-                border-radius: 0px;
-            }
-        """)
-
-        # 主布局
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(30, 25, 30, 25)
-        main_layout.setSpacing(20)
-
-        # 图标和标题
-        icon_layout = QHBoxLayout()
-
-        # 图标容器 - 添加背景和边框效果
-        icon_container = QWidget()
-        icon_container.setFixedSize(50, 50)
-        icon_container.setStyleSheet("""
-            QWidget {
-                background-color: #f8f9fa;
-                border: 2px solid #e9ecef;
-                border-radius: 8px;
-            }
-        """)
-        icon_container_layout = QVBoxLayout(icon_container)
-        icon_container_layout.setContentsMargins(8, 8, 8, 8)
-
-        icon_label = QLabel("🎬")
-        icon_label.setStyleSheet("""
-            font-size: 24px;
-            background: transparent;
-        """)
-        icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        icon_container_layout.addWidget(icon_label)
-
-        icon_layout.addWidget(icon_container)
-
-        # 标题区域
-        title_container = QWidget()
-        title_container.setStyleSheet("""
-            QWidget {
-                background: transparent;
-            }
-        """)
-        title_layout = QVBoxLayout(title_container)
-        title_layout.setContentsMargins(15, 0, 0, 0)
-        title_layout.setSpacing(4)
-
-        title_label = QLabel("FFmpeg未检测到")
-        title_label.setStyleSheet("""
-            font-size: 18px;
-            font-weight: bold;
-            color: #333;
-            background: transparent;
-        """)
-        title_layout.addWidget(title_label)
-
-        # 副标题
-        subtitle_label = QLabel("需要安装FFmpeg来处理多媒体文件")
-        subtitle_label.setStyleSheet("""
-            font-size: 13px;
-            color: #6c757d;
-            background: transparent;
-        """)
-        title_layout.addWidget(subtitle_label)
-
-        icon_layout.addWidget(title_container)
-        icon_layout.addStretch()
-        main_layout.addLayout(icon_layout)
-
-        # 说明文字
-        desc_label = QLabel(
-            "检测到您的系统中未安装FFmpeg。\n\nFFmpeg是处理音频和视频文件的重要工具，真寻Bot需要它来处理多媒体文件。\n\n是否要自动下载并安装FFmpeg？"
+    def exec(self):
+        """执行下载"""
+        # 创建进度条弹窗
+        from src.gui.widgets.global_dialog import ProgressDialog
+        self.progress_dialog = ProgressDialog(
+            "正在下载FFmpeg",
+            "正在从官方源下载FFmpeg，请稍候...",
+            self.parent
         )
-        desc_label.setWordWrap(True)
-        desc_label.setStyleSheet("""
-            color: #666;
-            font-size: 14px;
-            line-height: 1.5;
-            padding: 20px;
-            background-color: #f8f9fa;
-            border-radius: 6px;
-        """)
-        main_layout.addWidget(desc_label)
-
-        # 按钮区域
-        button_layout = QHBoxLayout()
-        button_layout.setSpacing(12)
-
-        # 取消按钮
-        self.cancel_button = AnimatedButton("取消")
-        self.cancel_button.setSecondaryStyle()
-        self.cancel_button.setFixedHeight(40)
-        self.cancel_button.clicked.connect(self.reject)
-
-        # 下载按钮
-        self.download_button = AnimatedButton("开始下载")
-        self.download_button.setFixedHeight(40)
-        self.download_button.clicked.connect(self.start_download)
-
-        button_layout.addWidget(self.cancel_button)
-        button_layout.addStretch()
-        button_layout.addWidget(self.download_button)
-
-        main_layout.addLayout(button_layout)
-
-    def setup_connections(self):
-        """设置信号连接"""
-        pass
-
-    def start_download(self):
-        """开始下载"""
-        # 关闭当前对话框
-        self.accept()
-
-        # 创建下载进度对话框
-        download_dialog = FFmpegDownloadProgressDialog(self.parent())
-        download_dialog.exec()
-
-
-class FFmpegDownloadProgressDialog(QDialog):
-    """FFmpeg下载进度对话框"""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.download_manager = None
-        self.setup_ui()
-        self.setup_connections()
+        
+        # 开始下载
         self.start_download()
-
-    def setup_ui(self):
-        """设置UI"""
-        self.setWindowTitle("FFmpeg下载")
-        self.setFixedSize(600, 350)
-        self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.WindowCloseButtonHint)
-        self.setModal(True)
-
-        # 设置背景
-        self.setStyleSheet("""
-            QDialog {
-                background-color: white;
-                border: 1px solid #e1e5e9;
-                border-radius: 8px;
-            }
-        """)
-
-        # 主布局
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(40, 30, 40, 30)
-        main_layout.setSpacing(25)
-
-        # 图标和标题
-        icon_layout = QHBoxLayout()
-
-        # 图标容器 - 添加背景和边框效果
-        icon_container = QWidget()
-        icon_container.setFixedSize(50, 50)
-        icon_container.setStyleSheet("""
-            QWidget {
-                background-color: #f8f9fa;
-                border: 2px solid #e9ecef;
-                border-radius: 8px;
-            }
-        """)
-        icon_container_layout = QVBoxLayout(icon_container)
-        icon_container_layout.setContentsMargins(8, 8, 8, 8)
-
-        icon_label = QLabel("🎬")
-        icon_label.setStyleSheet("""
-            font-size: 24px;
-            background: transparent;
-        """)
-        icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        icon_container_layout.addWidget(icon_label)
-
-        icon_layout.addWidget(icon_container)
-
-        # 标题区域
-        title_container = QWidget()
-        title_container.setStyleSheet("""
-            QWidget {
-                background: transparent;
-            }
-        """)
-        title_layout = QVBoxLayout(title_container)
-        title_layout.setContentsMargins(15, 0, 0, 0)
-        title_layout.setSpacing(4)
-
-        title_label = QLabel("正在下载FFmpeg")
-        title_label.setStyleSheet("""
-            font-size: 18px;
-            font-weight: bold;
-            color: #333;
-            background: transparent;
-        """)
-        title_layout.addWidget(title_label)
-
-        # 副标题
-        subtitle_label = QLabel("正在从官方源下载，请稍候...")
-        subtitle_label.setStyleSheet("""
-            font-size: 13px;
-            color: #6c757d;
-            background: transparent;
-        """)
-        title_layout.addWidget(subtitle_label)
-
-        icon_layout.addWidget(title_container)
-        icon_layout.addStretch()
-        main_layout.addLayout(icon_layout)
-
-        # 状态文字 - 简化为一个框
-        self.status_label = QLabel("正在从官方源下载FFmpeg，请稍候...")
-        self.status_label.setWordWrap(True)
-        self.status_label.setStyleSheet("""
-            color: #495057;
-            font-size: 15px;
-            line-height: 1.6;
-            background-color: #f8f9fa;
-            border: 2px solid #dee2e6;
-            border-radius: 0px;
-            padding: 20px;
-            margin: 10px 0px;
-        """)
-        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.status_label.setMinimumHeight(60)
-        main_layout.addWidget(self.status_label)
-
-        # 进度条
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setStyleSheet("""
-            QProgressBar {
-                border: 1px solid #e1e5e9;
-                border-radius: 6px;
-                text-align: center;
-                font-size: 12px;
-                background-color: #f8f9fa;
-                height: 20px;
-            }
-            QProgressBar::chunk {
-                background-color: #007acc;
-                border-radius: 5px;
-            }
-        """)
-        main_layout.addWidget(self.progress_bar)
-
-        # 按钮区域
-        button_layout = QHBoxLayout()
-        button_layout.setSpacing(12)
-
-        # 取消按钮 - 拉满宽度
-        self.cancel_button = AnimatedButton("取消")
-        self.cancel_button.setSecondaryStyle()
-        self.cancel_button.setFixedHeight(45)
-        self.cancel_button.clicked.connect(self.cancel_download)
-
-        button_layout.addWidget(self.cancel_button)
-
-        main_layout.addLayout(button_layout)
-
-    def setup_connections(self):
-        """设置信号连接"""
-        pass
+        
+        # 显示进度条弹窗
+        self.progress_dialog.exec()
 
     def start_download(self):
         """开始下载"""
@@ -1538,140 +1253,34 @@ class FFmpegDownloadProgressDialog(QDialog):
 
         # 创建下载管理器
         self.download_manager = SmartDownloadManager(url, "FFmpeg")
-        self.download_manager.progress_updated.connect(self.update_progress)
-        self.download_manager.status_updated.connect(self.update_status)
+        
+        # 连接进度信号到进度条
+        self.download_manager.progress_updated.connect(self.progress_dialog.set_progress)
+        self.download_manager.status_updated.connect(self.progress_dialog.set_status)
         self.download_manager.download_finished.connect(self.on_download_finished)
+        
         self.download_manager.start()
-
-    def update_progress(self, value):
-        """更新进度条"""
-        self.progress_bar.setValue(value)
-
-    def update_status(self, status):
-        """更新状态"""
-        # 根据不同的状态显示不同的信息
-        if "下载" in status or "Download" in status:
-            self.status_label.setText("正在从官方源下载FFmpeg，请稍候...")
-            # self.dynamic_status.setText("正在下载………") # This line was removed as per the edit hint
-        elif "解压" in status or "解压" in status:
-            self.status_label.setText("正在解压FFmpeg文件，请稍候...")
-            # self.dynamic_status.setText("正在解压………") # This line was removed as per the edit hint
-        elif "安装" in status or "配置" in status:
-            self.status_label.setText("正在安装和配置FFmpeg，请稍候...")
-            # self.dynamic_status.setText("正在安装………") # This line was removed as per the edit hint
-        else:
-            self.status_label.setText("正在从官方源下载FFmpeg，请稍候...")
-            # self.dynamic_status.setText("正在下载………") # This line was removed as per the edit hint
 
     def on_download_finished(self, success, message):
         """下载完成"""
+        # 关闭进度条弹窗
+        if self.progress_dialog:
+            self.progress_dialog.close()
+        
         if success:
-            # 创建安装完成对话框
-            completion_dialog = FFmpegInstallationCompleteDialog(self)
-            completion_dialog.exec()
-            self.accept()
+            # 显示安装完成对话框
+            show_success_dialog(
+                "安装完成",
+                "FFmpeg 已成功安装并配置到PATH\n\n请重新启动命令行或IDE以使用新的PATH设置",
+                self.parent
+            )
         else:
             # 显示错误消息
-            QMessageBox.warning(
-                self,
+            show_error_dialog(
                 "下载失败",
                 f"下载过程中出现错误：{message}\n\n请检查网络连接后重试。",
+                self.parent
             )
-            self.reject()
-
-    def cancel_download(self):
-        """取消下载"""
-        if self.download_manager and self.download_manager.isRunning():
-            self.download_manager.terminate()
-            self.download_manager.wait()
-        self.reject()
-
-    def closeEvent(self, event):
-        """关闭事件"""
-        if self.download_manager and self.download_manager.isRunning():
-            self.download_manager.terminate()
-            self.download_manager.wait()
-        super().closeEvent(event)
 
 
-class FFmpegInstallationCompleteDialog(QDialog):
-    """FFmpeg安装完成对话框"""
 
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setup_ui()
-
-    def setup_ui(self):
-        """设置UI"""
-        self.setWindowTitle("安装完成")
-        self.setFixedSize(300, 200)
-        self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.WindowCloseButtonHint)
-        self.setModal(True)
-
-        # 主布局
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(20, 20, 20, 20)
-        main_layout.setSpacing(15)
-
-        # 成功图标和标题
-        header_layout = QHBoxLayout()
-        header_layout.setSpacing(8)
-
-        # 成功图标
-        success_icon = QLabel("✅")
-        success_icon.setStyleSheet("""
-            font-size: 24px;
-            background: transparent;
-        """)
-        header_layout.addWidget(success_icon)
-
-        # 标题
-        title_label = QLabel("安装完成")
-        title_label.setStyleSheet("""
-            font-size: 16px;
-            font-weight: bold;
-            background: transparent;
-        """)
-        header_layout.addWidget(title_label)
-        header_layout.addStretch()
-
-        main_layout.addLayout(header_layout)
-
-        # 状态消息
-        status_label = QLabel("FFmpeg 已成功安装并配置到PATH")
-        status_label.setStyleSheet("""
-            font-size: 12px;
-            background: transparent;
-        """)
-        main_layout.addWidget(status_label)
-
-        # 提示消息
-        tip_label = QLabel("请重新启动命令行或IDE以使用新的PATH设置")
-        tip_label.setStyleSheet("""
-            font-size: 11px;
-            color: #666;
-            background: transparent;
-        """)
-        tip_label.setWordWrap(True)
-        main_layout.addWidget(tip_label)
-
-        main_layout.addStretch()
-
-        # 确定按钮
-        ok_button = AnimatedButton("确定")
-        ok_button.setStyleSheet("""
-            QPushButton {
-                background-color: #28a745;
-                color: white;
-                border: none;
-                font-size: 12px;
-                font-weight: bold;
-                padding: 6px 12px;
-                min-height: 30px;
-            }
-            QPushButton:hover {
-                background-color: #218838;
-            }
-        """)
-        ok_button.clicked.connect(self.accept)
-        main_layout.addWidget(ok_button)

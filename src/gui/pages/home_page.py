@@ -438,6 +438,28 @@ class HomePage(QWidget):
             }
         """)
 
+        # 测试弹窗按钮
+        test_dialog_btn = QPushButton("测试弹窗")
+        test_dialog_btn.setFixedHeight(36)
+        test_dialog_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #17a2b8;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                font-size: 14px;
+                font-weight: 600;
+                padding: 0 20px;
+            }
+            QPushButton:hover {
+                background-color: #138496;
+            }
+            QPushButton:pressed {
+                background-color: #117a8b;
+            }
+        """)
+        test_dialog_btn.clicked.connect(self.show_test_dialog)
+
         # 添加按钮
         add_btn = QPushButton("+ 添加")
         add_btn.setFixedHeight(36)
@@ -460,7 +482,33 @@ class HomePage(QWidget):
         """)
 
         button_layout.addWidget(delete_btn)
+        button_layout.addWidget(test_dialog_btn)
         button_layout.addStretch()
         button_layout.addWidget(add_btn)
 
         layout.addLayout(button_layout)
+
+    def show_test_dialog(self):
+        """显示测试弹窗"""
+        from ..widgets import (
+            show_confirm_dialog,
+            show_error_dialog,
+            show_info_dialog,
+            show_multi_button_dialog,
+            show_success_dialog,
+            show_warning_dialog,
+        )
+        
+        # 显示多按钮弹窗演示
+        buttons = [
+            {"text": "取消", "type": "default"},
+            {"text": "了解更多", "type": "info"},
+            {"text": "立即体验", "type": "primary"}
+        ]
+        
+        show_multi_button_dialog(
+            "多按钮弹窗功能",
+            "🎉 新增多按钮支持功能！\n\n✨ 功能亮点：\n• 支持动态添加多个按钮\n• 6种按钮样式类型：default、primary、success、warning、danger、info\n• 支持按钮回调函数\n• 保持原有的美观设计\n• 流畅的动画效果\n\n🔧 技术特性：\n• 按钮类型：default(灰色)、primary(蓝色)、success(绿色)、warning(黄色)、danger(红色)、info(青色)\n• 支持自定义回调函数\n• 信号机制：button_clicked信号传递按钮文本\n• 完全向后兼容原有弹窗类型",
+            buttons,
+            self
+        )
