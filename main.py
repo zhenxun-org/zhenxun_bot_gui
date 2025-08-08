@@ -4,62 +4,47 @@
 真寻Bot GUI主程序入口
 """
 
+import os
+import platform
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication, QDialog
+# 在Windows上隐藏控制台窗口
+if platform.system() == "Windows":
+    import ctypes
+    # 隐藏控制台窗口
+    ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
+    
+    # 重定向输出到日志文件
+    log_file = Path("app.log")
+    sys.stdout = open(log_file, "w", encoding="utf-8")
+    sys.stderr = open(log_file, "a", encoding="utf-8")
 
-# 添加项目根目录到Python路径
-project_root = Path(__file__).parent
-sys.path.insert(0, str(project_root))
+# 请求管理员权限
+from src.gui.pages.environment_page import request_admin_privileges
 
-from src.gui.intro_dialog import IntroDialog
+request_admin_privileges()
+
+from PySide6.QtWidgets import QApplication
+
 from src.gui.main_window import MainWindow
-from src.utils.config import ConfigManager
 
 
 def main():
-    """主程序入口"""
-    # 创建应用程序实例
+    """主函数"""
     app = QApplication(sys.argv)
+    
+    # 设置应用程序信息
     app.setApplicationName("真寻Bot GUI")
-    app.setApplicationVersion("0.1.0")
-    app.setOrganizationName("HibiKier")
-
-    # 设置应用程序图标
-    try:
-        from PySide6.QtGui import QIcon
-
-        icon = QIcon("assets/icons/logo.png")
-        app.setWindowIcon(icon)
-    except Exception as e:
-        print(f"设置应用程序图标失败: {e}")
-
-    # 设置应用程序样式
-    app.setStyle("Fusion")
-
-    # 配置管理器
-    config_manager = ConfigManager()
-
-    # 检查是否首次启动
-    if config_manager.is_first_run():
-        # 显示介绍对话框
-        intro_dialog = IntroDialog()
-        if intro_dialog.exec() == QDialog.DialogCode.Accepted:
-            # 标记为非首次启动
-            config_manager.set_first_run_completed()
-        else:
-            # 用户关闭了介绍对话框，退出程序
-            return 0
-
-    # 创建并显示主窗口
-    main_window = MainWindow()
-    main_window.show()
-
-    # 启动事件循环
-    return app.exec()
-
+    app.setApplicationVersion("1.0.0")
+    app.setOrganizationName("真寻Bot")
+    
+    # 创建主窗口
+    window = MainWindow()
+    window.show()
+    
+    # 运行应用程序
+    sys.exit(app.exec())
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

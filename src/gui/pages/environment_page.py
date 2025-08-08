@@ -199,59 +199,105 @@ class SmartDownloadManager(QThread):
             return
             
         if platform.system() == "Windows":
-            self._configure_windows_path(bin_dir)
+            self._configure_windows_path(bin_dir.absolute())
         else:
-            self._configure_unix_path(bin_dir)
+            self._configure_unix_path(bin_dir.absolute())
 
     def _configure_windows_path(self, permanent_dir):
         """配置Windows PATH"""
+        import winreg
+        path_to_add = str(permanent_dir)
+        
         try:
-            import winreg
-
-            # 获取当前用户的PATH
+            # 首先尝试写入系统级别的PATH
             key = winreg.OpenKey(
-                winreg.HKEY_CURRENT_USER,
-                "Environment",
+                winreg.HKEY_LOCAL_MACHINE,
+                r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment",
                 0,
                 winreg.KEY_READ | winreg.KEY_WRITE,
             )
             current_path = winreg.QueryValueEx(key, "Path")[0]
 
             # 检查是否已经在PATH中
-            path_to_add = str(permanent_dir)
             if path_to_add not in current_path:
-                # 添加到PATH
+                # 添加到系统PATH
                 new_path = current_path + ";" + path_to_add
                 winreg.SetValueEx(key, "Path", 0, winreg.REG_EXPAND_SZ, new_path)
                 winreg.CloseKey(key)
 
                 # 刷新环境变量
                 self._refresh_environment_variables()
+                print(f"已成功将 {path_to_add} 添加到系统PATH")
 
         except Exception as e:
-            print(f"配置Windows PATH失败: {e}")
+            print(f"配置Windows系统PATH失败: {e}")
+            print("尝试使用用户PATH作为备选方案...")
+            try:
+                # 备选方案：使用用户PATH
+                key = winreg.OpenKey(
+                    winreg.HKEY_CURRENT_USER,
+                    "Environment",
+                    0,
+                    winreg.KEY_READ | winreg.KEY_WRITE,
+                )
+                current_path = winreg.QueryValueEx(key, "Path")[0]
+
+                if path_to_add not in current_path:
+                    new_path = current_path + ";" + path_to_add
+                    winreg.SetValueEx(key, "Path", 0, winreg.REG_EXPAND_SZ, new_path)
+                    winreg.CloseKey(key)
+                    self._refresh_environment_variables()
+                    print(f"已成功将 {path_to_add} 添加到用户PATH")
+            except Exception as e2:
+                print(f"配置用户PATH也失败: {e2}")
 
     def _configure_unix_path(self, permanent_dir):
         """配置Unix PATH"""
         try:
-            # 获取shell配置文件
-            rc_file = self._get_shell_rc_file()
-            if not rc_file:
-                return
-
-            # 检查是否已经在PATH中
+            # 尝试写入系统级别的PATH配置文件
+            system_path_files = [
+                "/etc/environment",  # 系统环境变量
+                "/etc/profile",      # 系统profile
+            ]
+            
             path_to_add = str(permanent_dir)
-            with open(rc_file, "r") as f:
-                content = f.read()
+            success = False
+            
+            for path_file in system_path_files:
+                try:
+                    if os.path.exists(path_file):
+                        with open(path_file, "r") as f:
+                            content = f.read()
+                        
+                        if path_to_add not in content:
+                            # 添加到系统PATH
+                            export_line = f'\nexport PATH="$PATH:{path_to_add}"\n'
+                            with open(path_file, "a") as f:
+                                f.write(export_line)
+                            
+                            print(f"已成功将 {path_to_add} 添加到系统PATH文件: {path_file}")
+                            success = True
+                            break
+                except Exception as e:
+                    print(f"写入系统PATH文件 {path_file} 失败: {e}")
+                    continue
+            
+            if not success:
+                print("系统PATH配置失败，尝试用户级配置...")
+                # 备选方案：使用用户shell配置文件
+                rc_file = self._get_shell_rc_file()
+                if rc_file:
+                    with open(rc_file, "r") as f:
+                        content = f.read()
 
-            if path_to_add not in content:
-                # 添加到PATH
-                export_line = f'\nexport PATH="$PATH:{path_to_add}"\n'
-                with open(rc_file, "a") as f:
-                    f.write(export_line)
+                    if path_to_add not in content:
+                        export_line = f'\nexport PATH="$PATH:{path_to_add}"\n'
+                        with open(rc_file, "a") as f:
+                            f.write(export_line)
+                        print(f"已成功将 {path_to_add} 添加到用户PATH文件: {rc_file}")
 
-                # 刷新当前进程的环境变量
-                self._refresh_environment_variables()
+            # 刷新当前进程的环境变量
+            self._refresh_environment_variables()
 
         except Exception as e:
             print(f"配置Unix PATH失败: {e}")
