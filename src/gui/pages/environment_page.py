@@ -332,7 +332,22 @@ class SmartDownloadDialog:
         if success:
             show_success_dialog("下载完成", message, self.parent)
         else:
-            show_error_dialog("下载失败", message, self.parent)
+            # 显示错误消息并提供重试选项
+            buttons = [
+                {"text": "重试", "type": "primary"},
+                {"text": "取消", "type": "default"}
+            ]
+            
+            result = show_multi_button_dialog(
+                "下载失败",
+                f"下载过程中出现错误：{message}\n\n请检查网络连接后重试。",
+                buttons,
+                self.parent
+            )
+            
+            if result == "重试":
+                # 重新开始下载
+                self.start_download()
 
 
 
@@ -1275,12 +1290,22 @@ class FFmpegDownloadProgressDialog:
                 self.parent
             )
         else:
-            # 显示错误消息
-            show_error_dialog(
+            # 显示错误消息并提供重试选项
+            buttons = [
+                {"text": "重试", "type": "primary"},
+                {"text": "取消", "type": "default"}
+            ]
+            
+            result = show_multi_button_dialog(
                 "下载失败",
                 f"下载过程中出现错误：{message}\n\n请检查网络连接后重试。",
+                buttons,
                 self.parent
             )
+            
+            if result == "重试":
+                # 重新开始下载
+                self.start_download()
 
 
 
